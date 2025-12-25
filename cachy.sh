@@ -22,10 +22,6 @@ if pacman -Qs fastfetch > /dev/null; then
     sudo pacman -Rns --noconfirm fastfetch
 fi
 
-if pacman -Qs waybar > /dev/null; then
-  sudo pacman -Rns --noconfirm waybar
-fi
-
 # 3. Definir ZSH como shell padrão
 echo ">>> Alterando shell padrão para Zsh..."
 # Usa o caminho absoluto e aplica ao usuário atual

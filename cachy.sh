@@ -15,7 +15,7 @@ echo -e "${GREEN}--- Iniciando configuração do ambiente ---${NC}"
 # 1. Instalar pacotes com pacman
 echo -e "${YELLOW}>>> Instalando pacotes...${NC}"
 # Nota: Confirme se o nome é 'quickshell' ou 'quick-shell' no seu repo
-sudo pacman -S --needed --noconfirm quickshell noctalia-shell wlsunset nwg-look adw-gtk-theme pavucontrol-qt stow yay lsd ufw
+sudo pacman -S --needed --noconfirm quickshell noctalia-shell wlsunset nwg-look adw-gtk-theme pavucontrol-qt stow yay lsd ufw ttf-firacode-nerd
 
 # 2. Desinstalar pacotes
 echo -e "${YELLOW}>>> Removendo pacotes indesejados...${NC}"

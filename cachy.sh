@@ -1,130 +1,145 @@
 #!/bin/bash
 
-# Abortar o script se algum comando der erro
+# ==============================================================================
+# SCRIPT DE PÓS-INSTALAÇÃO E CONFIGURAÇÃO DE AMBIENTE (CachyOS/Arch)
+# Objetivo: Instalação de pacotes, troca de DM (SDDM -> Ly) e gestão de dotfiles.
+# ==============================================================================
+
+# Interrompe a execução se qualquer comando falhar
 set -e
 
-# --- Definição de Cores ---
+# --- Definição de Cores para Feedback Visual ---
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m' # Sem cor
 
 echo -e "${GREEN}--- Iniciando configuração do ambiente ---${NC}"
 
-# 1. Instalar pacotes com pacman (Removi o 'ly' daqui para tratar abaixo)
-echo -e "${YELLOW}>>> Instalando pacotes gerais...${NC}"
-# Nota: Confirme se o nome é 'quickshell' ou 'quick-shell' no seu repo
-sudo pacman -S --needed --noconfirm quickshell noctalia-shell wlsunset nwg-look adw-gtk-theme pavucontrol-qt stow yay lsd ufw ttf-firacode-nerd matugen zoxide fzf
+# ------------------------------------------------------------------------------
+# 1. INSTALAÇÃO DE PACOTES SISTEMA
+# ------------------------------------------------------------------------------
+echo -e "${YELLOW}>>> Instalando pacotes base e ferramentas de UI...${NC}"
+# Nota: --needed evita reinstalar o que já está atualizado
+sudo pacman -S --needed --noconfirm \
+    quickshell noctalia-shell wlsunset nwg-look adw-gtk-theme \
+    pavucontrol-qt stow yay lsd ufw ttf-firacode-nerd \
+    matugen zoxide fzf zen-browser neovim qt6ct \
+    cliphist cava power-profiles-daemon ddcutil
 
-# 1.5 Troca de Display Manager (SDDM -> Ly)
-echo -e "${YELLOW}>>> Configurando Display Manager (Trocando SDDM pelo Ly)...${NC}"
+echo -e "${GREEN}--- Definindo esquema de cores: Dark Mode ---${NC}"
+gsettings set org.gnome.desktop.interface color-scheme prefer-dark
 
-# Tenta desativar o SDDM se o serviço existir/estiver ativo
+# ------------------------------------------------------------------------------
+# 2. MIGRAÇÃO DE DISPLAY MANAGER (SDDM para Ly TUI)
+# ------------------------------------------------------------------------------
+echo -e "${YELLOW}>>> Configurando o Ly como novo Display Manager...${NC}"
+
+# Desativa o serviço SDDM caso esteja ativo para evitar conflitos no boot
 if systemctl is-enabled --quiet sddm 2>/dev/null; then
     echo -e "${BLUE}Desativando serviço SDDM...${NC}"
     sudo systemctl disable sddm
 fi
 
-# Remove o SDDM se estiver instalado
+# Remove o pacote SDDM e suas configurações de sistema
 if pacman -Qs sddm > /dev/null; then
     echo -e "${BLUE}Removendo pacote SDDM...${NC}"
     sudo pacman -Rns --noconfirm sddm
 else
-    echo -e "${BLUE}SDDM não encontrado, pulando remoção.${NC}"
+    echo -e "${BLUE}SDDM não encontrado, ignorando remoção.${NC}"
 fi
 
-# Instala o Ly
-echo -e "${BLUE}Instalando Ly...${NC}"
+# Instala e habilita o Ly (Display Manager em modo texto)
+echo -e "${BLUE}Instalando e ativando Ly no TTY1...${NC}"
 sudo pacman -S --needed --noconfirm ly
-
-# Ativa o Ly
-echo -e "${BLUE}Ativando serviço Ly...${NC}"
 sudo systemctl enable ly@tty1.service
+# Desativar o getty@tty1 é necessário para o Ly assumir o terminal principal
 sudo systemctl disable getty@tty1.service
-echo -e "${GREEN}Display Manager Ly configurado com sucesso!${NC}"
 
-# 2. Desinstalar outros pacotes indesejados
-echo -e "${YELLOW}>>> Removendo outros pacotes indesejados...${NC}"
-if pacman -Qs cachyos-fish-config > /dev/null; then
-    sudo pacman -Rns --noconfirm cachyos-fish-config
-fi
+# ------------------------------------------------------------------------------
+# 3. LIMPEZA E SEGURANÇA
+# ------------------------------------------------------------------------------
+echo -e "${YELLOW}>>> Removendo pacotes redundantes do sistema...${NC}"
+# Removendo configurações padrão do Cachy para priorizar os dotfiles pessoais
+for pkg in cachyos-fish-config fastfetch; do
+    if pacman -Qs $pkg > /dev/null; then
+        sudo pacman -Rns --noconfirm $pkg
+    fi
+done
 
-if pacman -Qs fastfetch > /dev/null; then
-    sudo pacman -Rns --noconfirm fastfetch
-fi
-
-# 3. Configurar e Ativar UFW (Firewall)
-echo -e "${GREEN}>>> Configurando o Firewall (UFW)...${NC}"
+echo -e "${GREEN}>>> Aplicando políticas de Firewall (UFW)...${NC}"
 sudo systemctl enable --now ufw.service
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw --force enable
-echo -e "${BLUE}Status do UFW:${NC}"
-sudo ufw status verbose
 
-# 4. Definir ZSH como shell padrão
-echo -e "${GREEN}>>> Alterando shell padrão para Zsh...${NC}"
+# ------------------------------------------------------------------------------
+# 4. GESTÃO DE DOTFILES (Git + GNU Stow)
+# ------------------------------------------------------------------------------
+echo -e "${GREEN}>>> Configurando Shell e Repositório de Dotfiles...${NC}"
 sudo chsh -s /usr/bin/zsh $(whoami)
 
-# 5. Clonar repositório de dotfiles
-echo -e "${GREEN}>>> Clonando dotfiles...${NC}"
 REPO_URL="https://github.com/fabioalmeida08/.dotfiles"
+DOT_DIR="$HOME/.dotfiles"
 
-if [ -d "$HOME/.dotfiles" ]; then
-    echo -e "${BLUE}A pasta .dotfiles já existe. Pulando clone.${NC}"
+if [ -d "$DOT_DIR" ]; then
+    echo -e "${BLUE}Diretório $DOT_DIR já existe. Pulando clonagem.${NC}"
 else
-    git clone "$REPO_URL" "$HOME/.dotfiles"
+    git clone "$REPO_URL" "$DOT_DIR"
 fi
 
-# 6. Aplicar Stow (Ignorando TODOS os arquivos .zshrc*)
-echo -e "${GREEN}>>> Aplicando configurações com Stow...${NC}"
-cd "$HOME/.dotfiles"
+echo -e "${GREEN}>>> Sincronizando configurações com GNU Stow...${NC}"
+cd "$DOT_DIR"
 
-# --ignore="^.zshrc" vai ignorar .zshrc, .zshrc_cachy, .zshrc_custom, etc.
+# --adopt: Faz o Stow "adotar" arquivos existentes, vinculando-os ao repo
+# --ignore: Evita conflitos com arquivos zsh específicos que trataremos manualmente
 stow --adopt --ignore='^.zshrc' .
 
-# 7. Linkar manualmente APENAS o arquivo Cachy
-echo -e "${GREEN}>>> Configurando .zshrc específico do CachyOS...${NC}"
+# ------------------------------------------------------------------------------
+# 5. CONFIGURAÇÃO MANUAL DO ZSH (Caso específico CachyOS)
+# ------------------------------------------------------------------------------
+echo -e "${GREEN}>>> Vinculando .zshrc_cachy à Home...${NC}"
 
-# Remove qualquer .zshrc que exista na home (arquivo ou link antigo)
+# Garante que não haja um arquivo físico ou link quebrado impedindo a criação do novo link
 if [ -f "$HOME/.zshrc" ] || [ -L "$HOME/.zshrc" ]; then
     rm "$HOME/.zshrc"
-    echo -e "${GREEN}Arquivo/Link .zshrc antigo removido da Home.${NC}"
 fi
 
-# Cria o link simbólico manual: Home/.zshrc -> Repo/.zshrc_cachy
-if [ -f "$HOME/.dotfiles/.zshrc_cachy" ]; then
-    ln -s "$HOME/.dotfiles/.zshrc_cachy" "$HOME/.zshrc"
-    echo -e "${GREEN}Sucesso: ~/.zshrc agora aponta para .dotfiles/.zshrc_cachy${NC}"
+if [ -f "$DOT_DIR/.zshrc_cachy" ]; then
+    ln -s "$DOT_DIR/.zshrc_cachy" "$HOME/.zshrc"
+    echo -e "${GREEN}Sucesso: ~/.zshrc agora aponta para os dotfiles.${NC}"
 else
-    echo -e "${RED}Erro CRÍTICO: Arquivo .zshrc_cachy não encontrado no repositório!${NC}"
+    echo -e "${RED}ERRO CRÍTICO: .zshrc_cachy ausente no repositório!${NC}"
     exit 1
 fi
 
-# Configura ly
-echo -e "${GREEN}>>> Configurando arquivo config.ini do Ly...${NC}"
+# ------------------------------------------------------------------------------
+# 6. CONFIGURAÇÃO DE SISTEMA DO LY
+# ------------------------------------------------------------------------------
+echo -e "${GREEN}>>> Aplicando config.ini do Ly em /etc/...${NC}"
 
-# Define origem e destino
-LY_CONFIG_SRC="$HOME/.dotfiles/.config/ly/config.ini"
-LY_CONFIG_DEST="/etc/ly/config.ini"
+LY_SRC="$DOT_DIR/.config/ly/config.ini"
+LY_DEST="/etc/ly/config.ini"
 
-if [ -f "$LY_CONFIG_SRC" ]; then
-    # Faz backup do original se existir
-    if [ -f "$LY_CONFIG_DEST" ]; then
-        sudo mv "$LY_CONFIG_DEST" "${LY_CONFIG_DEST}.bak"
-    fi
+if [ -f "$LY_SRC" ]; then
+    # Backup da config original de fábrica
+    [ -f "$LY_DEST" ] && sudo mv "$LY_DEST" "${LY_DEST}.bak"
 
-    # Copia o arquivo (não linka) para garantir permissões de root
-    sudo cp "$LY_CONFIG_SRC" "$LY_CONFIG_DEST"
-    
-    # Garante que o root seja o dono
-    sudo chown root:root "$LY_CONFIG_DEST"
-    
+    # Copiamos em vez de linkar porque o /etc exige permissões de root
+    sudo cp "$LY_SRC" "$LY_DEST"
+    sudo chown root:root "$LY_DEST"
     echo -e "${GREEN}Configuração do Ly aplicada com sucesso!${NC}"
 else
-    echo -e "${RED}Aviso: Config customizada do Ly não encontrada em $LY_CONFIG_SRC${NC}"
+    echo -e "${RED}Aviso: Configuração do Ly não encontrada em $LY_SRC${NC}"
 fi
 
+# ------------------------------------------------------------------------------
+# FINALIZAÇÃO
+# ------------------------------------------------------------------------------
+cd "$DOT_DIR"
+# Descarta mudanças locais feitas pelo comando 'stow --adopt' para manter o repo limpo
+git checkout .
+
 echo -e "${GREEN}--- Script finalizado com sucesso! ---${NC}"
-echo -e "O Ly foi ativado. Por favor, ${BLUE}reinicie o sistema${NC} para entrar no novo Display Manager."
+echo -e "O Ly foi ativado. Por favor, ${BLUE}reinicie o sistema${NC} para concluir."

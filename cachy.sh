@@ -27,7 +27,7 @@ sudo pacman -S --needed --noconfirm \
     pavucontrol-qt stow yay lsd ufw ttf-firacode-nerd \
     matugen zoxide fzf zen-browser neovim qt6ct \
     cliphist cava power-profiles-daemon ddcutil \
-    protonup-qt
+    protonup-qt mangohud lib32-mangohud
 
 echo -e "${GREEN}--- Definindo esquema de cores: Dark Mode ---${NC}"
 gsettings set org.gnome.desktop.interface color-scheme prefer-dark

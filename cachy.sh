@@ -116,6 +116,32 @@ else
 fi
 
 # ------------------------------------------------------------------------------
+# 5.1 CONFIGURAÇÃO DO NIRI (LINK SIMBÓLICO DE CONFIG)
+# ------------------------------------------------------------------------------
+echo -e "${GREEN}>>> Configurando link do Niri (config.kdl)...${NC}"
+
+NIRI_DIR="$HOME/.config/niri"
+NIRI_SRC="$DOT_DIR/.config/niri/config_cachy.kdl"
+NIRI_DEST="$NIRI_DIR/config.kdl"
+
+# Garante que o diretório exista
+mkdir -p "$NIRI_DIR"
+
+# Remove arquivo ou link existente
+if [ -f "$NIRI_DEST" ] || [ -L "$NIRI_DEST" ]; then
+    rm "$NIRI_DEST"
+fi
+
+# Cria o link simbólico
+if [ -f "$NIRI_SRC" ]; then
+    ln -s "$NIRI_SRC" "$NIRI_DEST"
+    echo -e "${GREEN}Sucesso: config.kdl agora aponta para config_cachy.kdl${NC}"
+else
+    echo -e "${RED}ERRO: config_cachy.kdl não encontrado em $NIRI_SRC${NC}"
+    exit 1
+fi
+
+# ------------------------------------------------------------------------------
 # 6. CONFIGURAÇÃO DE SISTEMA DO LY
 # ------------------------------------------------------------------------------
 echo -e "${GREEN}>>> Aplicando config.ini do Ly em /etc/...${NC}"
